@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/invopop/jsonschema"
 	"github.com/joho/godotenv"
@@ -146,7 +147,9 @@ func (a *Agent) Run(ctx context.Context) error {
 			conversation = append(conversation, Message{Role: "user", Content: userInput})
 		}
 
+		stop := startSpinner()
 		msg, err := chat(ctx, a.apiKey, a.model, conversation, tools)
+		stop()
 		if err != nil {
 			return err
 		}
@@ -188,6 +191,33 @@ func (a *Agent) executeTool(tc ToolCall) Message {
 		return Message{Role: "tool", ToolCallID: tc.ID, Content: "error: " + err.Error()}
 	}
 	return Message{Role: "tool", ToolCallID: tc.ID, Content: out}
+}
+
+// startSpinner draws a Braille spinner while waiting on the model. Returns a
+// stop function. No-op when stdout isn't a TTY (piped/redirected).
+func startSpinner() func() {
+	fi, _ := os.Stdout.Stat()
+	if fi.Mode()&os.ModeCharDevice == 0 {
+		return func() {}
+	}
+	frames := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		t := time.NewTicker(80 * time.Millisecond)
+		defer t.Stop()
+		for i := 0; ; i++ {
+			fmt.Printf("\r\x1b[36m%c\x1b[0m thinking…", frames[i%len(frames)])
+			select {
+			case <-stop:
+				fmt.Print("\r\x1b[K")
+				return
+			case <-t.C:
+			}
+		}
+	}()
+	return func() { close(stop); <-done }
 }
 
 var ReadFileDefinition = ToolDefinition{
