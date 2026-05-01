@@ -1,0 +1,16 @@
+# Compiled binary
+agent
+*.test
+*.out
+
+# Local secrets
+.env
+
+# macOS
+.DS_Store
+
+# Editor / tooling
+.claude/
+.vscode/
+.idea/
+*.swp
